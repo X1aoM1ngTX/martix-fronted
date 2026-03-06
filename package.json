@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "openai2ts": "openai2ts",
+    "openapi2ts": "node openapi.config.js",
     "lint": "oxlint . --fix && eslint . --fix",
     "format": "prettier --write src/"
   },
