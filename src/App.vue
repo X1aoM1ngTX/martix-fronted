@@ -1,6 +1,15 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { ConfigProvider, theme } from 'ant-design-vue'
 import BasicLayout from '@/layouts/BasicLayout.vue'
+
+const route = useRoute()
+
+// 根据路由 meta 信息判断是否使用布局
+const useLayout = computed(() => {
+  return route.meta?.layout !== false
+})
 
 // 黑白主题配置
 const themeConfig = {
@@ -19,7 +28,10 @@ const themeConfig = {
 
 <template>
   <ConfigProvider :theme="themeConfig">
-    <BasicLayout />
+    <BasicLayout v-if="useLayout">
+      <RouterView />
+    </BasicLayout>
+    <RouterView v-else />
   </ConfigProvider>
 </template>
 

@@ -18,6 +18,15 @@ const router = createRouter({
       }
     },
     {
+      path: '/spreadsheet/:fileId',
+      name: 'Spreadsheet',
+      component: () => import('@/pages/file/SpreadsheetPage.vue'),
+      meta: {
+        access: ACCESS_ENUM.USER,
+        layout: false
+      }
+    },
+    {
       path: '/admin/user',
       name: 'userManage',
       component: () => import('@/pages/admin/UserManagePage.vue'),
@@ -39,6 +48,11 @@ const router = createRouter({
       path: '/user/register',
       name: 'register',
       component: () => import('@/pages/user/UserRegisterPage.vue')
+    },
+    {
+      path: '/about',
+      name: 'about',
+      component: () => import('@/pages/AboutPage.vue')
     }
   ]
 })

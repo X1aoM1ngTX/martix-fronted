@@ -4,7 +4,9 @@
       <GlobalHeader />
     </Header>
     <Content class="layout-content">
-      <RouterView />
+      <slot>
+        <RouterView />
+      </slot>
     </Content>
     <Footer class="layout-footer">
       <GlobalFooter />

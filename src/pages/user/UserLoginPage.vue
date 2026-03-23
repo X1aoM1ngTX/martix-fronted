@@ -44,7 +44,6 @@ import { Form, FormItem, Input, Button, Card, message } from 'ant-design-vue'
 import { UserOutlined, LockOutlined } from '@ant-design/icons-vue'
 import { userLogin } from '@/api/userController'
 import { useLoginUserStore } from '@/stores/useLoginUserStore'
-import type { AxiosResponse } from 'axios'
 
 const router = useRouter()
 const route = useRoute()
@@ -73,23 +72,22 @@ const handleLogin = async () => {
 
   loading.value = true
   try {
-    const response: AxiosResponse<API.BaseResponseLoginUserVO> = await userLogin({
+    // request 拦截器已经返回 data，所以 response 直接是 BaseResponseLoginUserVO
+    const response: API.BaseResponseLoginUserVO = await userLogin({
       account: formState.value.account,
       password: formState.value.password
     })
 
-    // response.data 是实际的 BaseResponseLoginUserVO 对象
-    const data = response.data
-    if (data.code === 0) {
+    if (response.code === 0) {
       message.success('登录成功')
       // 更新登录用户状态到 store
-      if (data.data) {
-        loginUserStore.loginUser = data.data
+      if (response.data) {
+        loginUserStore.loginUser = response.data
       }
       // 登录成功后跳转到之前的页面
       router.push(redirect)
     } else {
-      message.error(data.message || '登录失败')
+      message.error(response.message || '登录失败')
     }
   } catch (error) {
     message.error('登录失败，请重试')

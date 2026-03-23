@@ -249,11 +249,11 @@ const fetchUsers = async () => {
       role: searchForm.role || undefined
     }
     const res = await listUserByPage(queryRequest)
-    if (res.data?.code === 0 && res.data.data) {
-      dataSource.value = res.data.data.records || []
-      paginationConfig.total = res.data.data.total || 0
+    if (res.code === 0 && res.data) {
+      dataSource.value = res.data.records || []
+      paginationConfig.total = res.data.total || 0
     } else {
-      message.error(res.data?.message || '获取用户列表失败')
+      message.error(res.message || '获取用户列表失败')
     }
   } catch {
     message.error('获取用户列表失败，请重试')
@@ -318,11 +318,11 @@ const handleDelete = (record: API.UserVO) => {
     onOk: async () => {
       try {
         const res = await deleteUser({ id: record.id })
-        if (res.data?.code === 0) {
+        if (res.code === 0) {
           message.success('删除成功')
           fetchUsers()
         } else {
-          message.error(res.data?.message || '删除失败')
+          message.error(res.message || '删除失败')
         }
       } catch {
         message.error('删除失败，请重试')
@@ -348,12 +348,12 @@ const handleModalOk = async () => {
         status: formData.status
       }
       const res = await updateUser(updateData)
-      if (res.data?.code === 0) {
+      if (res.code === 0) {
         message.success('更新成功')
         modalVisible.value = false
         fetchUsers()
       } else {
-        message.error(res.data?.message || '更新失败')
+        message.error(res.message || '更新失败')
       }
     } else {
       // 新增用户
@@ -366,12 +366,12 @@ const handleModalOk = async () => {
         role: formData.role
       }
       const res = await addUser(addData)
-      if (res.data?.code === 0) {
+      if (res.code === 0) {
         message.success('新增成功')
         modalVisible.value = false
         fetchUsers()
       } else {
-        message.error(res.data?.message || '新增失败')
+        message.error(res.message || '新增失败')
       }
     }
   } catch (error: unknown) {

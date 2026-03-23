@@ -54,7 +54,6 @@ import { useRouter, useRoute } from 'vue-router'
 import { Form, FormItem, Input, Button, Card, message } from 'ant-design-vue'
 import { UserOutlined, LockOutlined } from '@ant-design/icons-vue'
 import { userRegister } from '@/api/userController'
-import type { AxiosResponse } from 'axios'
 
 const router = useRouter()
 const route = useRoute()
@@ -93,14 +92,13 @@ const handleRegister = async () => {
 
   loading.value = true
   try {
-    const response: AxiosResponse<API.BaseResponseLong> = await userRegister({
+    const response: API.BaseResponseLong = await userRegister({
       account: formState.value.account,
       password: formState.value.password,
       checkPassword: formState.value.checkPassword
     })
 
-    const data = response.data
-    if (data.code === 0) {
+    if (response.code === 0) {
       message.success('注册成功')
       // 注册成功后跳转到登录页
       router.push({
@@ -108,7 +106,7 @@ const handleRegister = async () => {
         query: redirect !== '/' ? { redirect } : undefined
       })
     } else {
-      message.error(data.message || '注册失败')
+      message.error(response.message || '注册失败')
     }
   } catch (error) {
     message.error('注册失败，请重试')

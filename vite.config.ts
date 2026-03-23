@@ -15,4 +15,16 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
   },
+  optimizeDeps: {
+    include: [
+      '@univerjs/presets',
+      '@univerjs/preset-sheets-core',
+      '@univerjs/core',
+      '@univerjs/ui',
+      '@univerjs/design',
+      'react',
+      'react-dom',
+      'rxjs',
+    ],
+  },
 })

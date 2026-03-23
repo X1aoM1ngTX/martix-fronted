@@ -1,140 +1,334 @@
 <script setup lang="ts">
-import { ref, h } from 'vue'
-
-interface Document {
-  id: number
-  title: string
-  location: string
-  owner: string
-  createTime: string
-  lastVisit: string
-  type: 'document' | 'spreadsheet'
-}
-
-interface ColumnCustomRenderParam {
-  record: Document
-}
+import { ref, h, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import {
+  listFilesByPage,
+  deleteFile,
+  downloadFile,
+  renameFile,
+  createBlankFile,
+  uploadFile as uploadFileApi
+} from '@/api/fileController'
+import { getUserVoById } from '@/api/userController'
+import { message, Modal } from 'ant-design-vue'
 import {
   SearchOutlined,
-  FileTextOutlined,
+  PlusOutlined,
+  UploadOutlined,
   TableOutlined,
-  SettingOutlined,
-  BorderOutlined,
-  UserOutlined,
-  MenuOutlined,
-  UnorderedListOutlined,
-  AppstoreOutlined,
-  MoreOutlined
+  MoreOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  ReloadOutlined,
+  UserOutlined
 } from '@ant-design/icons-vue'
+import dayjs from 'dayjs'
+import relativeTime from 'dayjs/plugin/relativeTime'
+import 'dayjs/locale/zh-cn'
 
-const documents = ref([
-  {
-    id: 1,
-    title: '矩阵Martix开发文档一、需求文档的结构',
-    location: '我的文档库',
-    owner: 'MaiMingqi',
-    createTime: '今天 19:41',
-    lastVisit: '今天 20:04',
-    type: 'document'
-  },
-  {
-    id: 2,
-    title: '未命名表格',
-    location: '我的文档库',
-    owner: 'MaiMingqi',
-    createTime: '今天 19:54',
-    lastVisit: '今天 20:02',
-    type: 'spreadsheet'
+dayjs.extend(relativeTime)
+dayjs.locale('zh-cn')
+
+const router = useRouter()
+
+const documents = ref<API.FileVO[]>([])
+const loading = ref(false)
+const current = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
+const searchFileName = ref('')
+
+// 用户信息缓存 (ownerId -> UserVO)
+const ownerMap = ref<Map<string, API.UserVO>>(new Map())
+
+// 获取用户信息（带缓存）
+const getOwnerInfo = async (ownerId: string): Promise<API.UserVO | undefined> => {
+  if (!ownerId) return undefined
+
+  // 检查缓存
+  if (ownerMap.value.has(ownerId)) {
+    return ownerMap.value.get(ownerId)
   }
-])
 
-const activeFilter = ref('recent')
-const viewMode = ref('list')
+  try {
+    console.log('获取用户信息, ownerId:', ownerId)
+    // 直接传递字符串参数，避免超大整数精度丢失
+    const res = await getUserVoById({ id: ownerId })
+    console.log('用户信息响应:', res)
+    if (res.code === 0 && res.data) {
+      ownerMap.value.set(ownerId, res.data)
+      return res.data
+    } else {
+      console.warn('获取用户信息失败:', res.message)
+    }
+  } catch (error) {
+    console.error('获取用户信息异常:', ownerId, error)
+  }
+  return undefined
+}
 
-const filters = [
-  { key: 'recent', label: '最近访问' },
-  { key: 'owned', label: '归我所有' },
-  { key: 'shared', label: '与我共享' },
-  { key: 'favorite', label: '收藏' }
-]
+// 格式化时间
+const formatTime = (time: string) => {
+  return dayjs(time).fromNow()
+}
 
+// 格式化完整时间
+const formatFullTime = (time: string) => {
+  return dayjs(time).format('YYYY-MM-DD HH:mm')
+}
+
+// 加载文件列表
+const loadFiles = async () => {
+  loading.value = true
+  try {
+    const res = await listFilesByPage({
+      current: current.value,
+      pageSize: pageSize.value,
+      fileName: searchFileName.value || undefined
+    })
+    console.log('API 响应:', res)
+    // request 拦截器已经返回 data，所以 res 直接是 BaseResponseIPageFileVO
+    if (res.code === 0 && res.data) {
+      const records = res.data.records || []
+      // 获取所有唯一的 ownerId
+      const uniqueOwnerIds = [...new Set(records.map(f => f.ownerId).filter(Boolean))]
+      // 并发获取用户信息
+      await Promise.all(uniqueOwnerIds.map(id => getOwnerInfo(id!)))
+      documents.value = records
+      // 确保 total 是 Number 类型
+      total.value = Number(res.data.total || 0)
+    } else {
+      message.error(res.message || '加载文件列表失败')
+    }
+  } catch (error) {
+    message.error('加载文件列表失败')
+    console.error(error)
+  } finally {
+    loading.value = false
+  }
+}
+
+// 搜索
+const handleSearch = () => {
+  current.value = 1
+  loadFiles()
+}
+
+// 分页改变
+const handlePageChange = (page: number, size: number) => {
+  current.value = page
+  pageSize.value = size
+  loadFiles()
+}
+
+// 打开文件（新标签页）
+const openFile = (record: API.FileVO) => {
+  const url = router.resolve({
+    name: 'Spreadsheet',
+    params: { fileId: String(record.id) }
+  }).href
+  window.open(url, '_blank')
+}
+
+// 下载文件
+const handleDownload = async (record: API.FileVO) => {
+  try {
+    const res = await downloadFile({ fileId: record.id || '' })
+    // 创建下载链接 - res.data 是实际的 Blob 数据
+    const blob = res.data
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = record.fileName || 'download'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    message.success('下载成功')
+  } catch (error) {
+    message.error('下载失败')
+    console.error(error)
+  }
+}
+
+// 重命名
+const handleRename = (record: API.FileVO) => {
+  Modal.confirm({
+    title: '重命名',
+    content: h('div', [
+      h('p', '请输入新文件名：'),
+      h('input', {
+        id: 'rename-input',
+        type: 'text',
+        value: record.fileName,
+        class: 'ant-input',
+        style: 'width: 100%; margin-top: 8px;'
+      })
+    ]),
+    onOk: async () => {
+      const input = document.getElementById('rename-input') as HTMLInputElement
+      const newName = input?.value?.trim()
+      if (!newName) {
+        message.error('文件名不能为空')
+        return Promise.reject()
+      }
+      try {
+        await renameFile({ id: record.id, newFileName: newName })
+        message.success('重命名成功')
+        loadFiles()
+      } catch {
+        message.error('重命名失败')
+        return Promise.reject()
+      }
+    }
+  })
+}
+
+// 删除文件
+const handleDelete = (record: API.FileVO) => {
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定要删除文件 "${record.fileName}" 吗？`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await deleteFile({ id: record.id })
+        message.success('删除成功')
+        loadFiles()
+      } catch {
+        message.error('删除失败')
+      }
+    }
+  })
+}
+
+// 表格列配置
 const columns = [
   {
-    title: '标题',
-    key: 'title',
-    customRender: ({ record }: ColumnCustomRenderParam) => {
-      return h('div', { class: 'doc-title-cell' }, [
-        record.type === 'document' ? h(FileTextOutlined) : h(TableOutlined),
-        h('span', record.title)
-      ])
-    }
+    title: '文件名',
+    key: 'fileName',
+    dataIndex: 'fileName'
   },
   {
-    title: '位置',
-    dataIndex: 'location',
-    key: 'location'
+    title: '类型',
+    dataIndex: 'fileType',
+    key: 'fileType',
+    width: 80
+  },
+  {
+    title: '大小',
+    dataIndex: 'fileSizeDisplay',
+    key: 'fileSizeDisplay',
+    width: 100
   },
   {
     title: '所有者',
-    dataIndex: 'owner',
-    key: 'owner'
+    key: 'owner',
+    width: 150
   },
   {
     title: '创建时间',
-    dataIndex: 'createTime',
-    key: 'createTime'
-  },
-  {
-    title: '最近访问',
-    dataIndex: 'lastVisit',
-    key: 'lastVisit'
+    key: 'createdAt',
+    width: 180,
+    dataIndex: 'createdAt'
   },
   {
     title: '操作',
     key: 'action',
     width: 80,
-    customRender: () => {
-      return h('a-button', { type: 'text', size: 'small' }, () => h(MoreOutlined))
-    }
+    align: 'center'
   }
 ]
 
-const sidebarDocs = ref([
-  { id: 1, title: '矩阵Martix开发文档一、需求文档…', type: 'document' },
-  { id: 2, title: '未命名表格', type: 'spreadsheet' }
-])
+// 新建文件
+const showCreateModal = ref(false)
+const createFileName = ref('')
+const createFileType = ref<'xlsx' | 'xls' | 'csv'>('xlsx')
 
-const selectedDoc = ref<number | null>(null)
+const handleCreate = async () => {
+  if (!createFileName.value.trim()) {
+    message.error('请输入文件名')
+    return
+  }
+  try {
+    const res = await createBlankFile({
+      fileName: createFileName.value,
+      fileType: createFileType.value
+    })
+    if (res.data) {
+      message.success('创建成功')
+      showCreateModal.value = false
+      createFileName.value = ''
+      // 在新标签页打开新创建的文件
+      const url = router.resolve({
+        name: 'Spreadsheet',
+        params: { fileId: String(res.data) }
+      }).href
+      window.open(url, '_blank')
+      // 刷新文件列表
+      loadFiles()
+    }
+  } catch {
+    message.error('创建失败')
+  }
+}
+
+// 上传文件
+const showUploadModal = ref(false)
+const uploadFile = ref<File | null>(null)
+const uploadLoading = ref(false)
+
+const handleFileSelect = (e: Event) => {
+  const target = e.target as HTMLInputElement
+  if (target.files && target.files[0]) {
+    uploadFile.value = target.files[0]
+  }
+}
+
+const handleUpload = async () => {
+  if (!uploadFile.value) {
+    message.error('请选择文件')
+    return
+  }
+  uploadLoading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', uploadFile.value)
+    const res = await uploadFileApi(formData)
+    if (res.data) {
+      message.success('上传成功')
+      showUploadModal.value = false
+      uploadFile.value = null
+      loadFiles()
+    }
+  } catch {
+    message.error('上传失败')
+  } finally {
+    uploadLoading.value = false
+  }
+}
+
+onMounted(() => {
+  loadFiles()
+})
 </script>
 
 <template>
   <div class="home-page">
     <!-- Left Sidebar -->
     <aside class="sidebar">
-      <!-- Search -->
-      <div class="sidebar-search">
+      <div class="sidebar-search" @click="() => {}">
         <SearchOutlined />
         <span>搜索</span>
       </div>
 
-      <!-- Navigation -->
       <nav class="sidebar-nav">
-
         <div class="nav-divider"></div>
-
         <div class="nav-section-title">我的文档库</div>
-
-        <div
-          v-for="doc in sidebarDocs"
-          :key="doc.id"
-          class="nav-doc-item"
-          :class="{ selected: selectedDoc === doc.id }"
-          @click="selectedDoc = doc.id"
-        >
-          <FileTextOutlined v-if="doc.type === 'document'" />
-          <TableOutlined v-else />
-          <span class="doc-title">{{ doc.title }}</span>
-        </div>
+        <div class="nav-item active">全部文件</div>
       </nav>
     </aside>
 
@@ -143,86 +337,145 @@ const selectedDoc = ref<number | null>(null)
       <!-- Top Header -->
       <header class="header">
         <div class="header-left">
-          <div class="header-actions">
-            <a-button type="text" size="large">
-              <template #icon>
-                <SearchOutlined />
-              </template>
-            </a-button>
-            <a-button type="text" size="large">
-              <template #icon>
-                <SettingOutlined />
-              </template>
-            </a-button>
-            <a-button type="text" size="large">
-              <template #icon>
-                <BorderOutlined />
-              </template>
-            </a-button>
-            <a-button type="text" size="large">
-              <template #icon>
-                <UserOutlined />
-              </template>
-            </a-button>
-          </div>
+          <a-input
+            v-model:value="searchFileName"
+            placeholder="搜索文件..."
+            style="width: 200px"
+            @pressEnter="handleSearch"
+          >
+            <template #prefix>
+              <SearchOutlined />
+            </template>
+          </a-input>
         </div>
-        <div class="header-title">主页</div>
+        <div class="header-actions">
+          <a-button type="primary" @click="showCreateModal = true">
+            <PlusOutlined />
+            新建
+          </a-button>
+          <a-button @click="showUploadModal = true">
+            <UploadOutlined />
+            上传
+          </a-button>
+          <a-button shape="circle" @click="loadFiles">
+            <ReloadOutlined />
+          </a-button>
+        </div>
       </header>
 
-      <!-- Action Bar -->
-      <div class="action-bar">
-        <div class="action-buttons">
-          <a-button type="primary">新建</a-button>
-          <a-button type="primary">上传</a-button>
-        </div>
-      </div>
-
-      <!-- Filter Bar -->
-      <div class="filter-bar">
-        <div class="filter-tabs">
-          <a-radio-group v-model:value="activeFilter" button-style="solid" size="small">
-            <a-radio-button v-for="filter in filters" :key="filter.key" :value="filter.key">
-              {{ filter.label }}
-            </a-radio-button>
-          </a-radio-group>
-          <a-button type="text" size="small" class="add-filter">+</a-button>
-        </div>
-        <div class="filter-actions">
-          <a-button type="text" size="small">筛选 ▼</a-button>
-          <a-button type="text" size="small">显示设置 ▼</a-button>
-          <a-button type="text" size="small">
-            <template #icon>
-              <MenuOutlined />
-            </template>
-          </a-button>
-          <a-button
-            type="text"
-            size="small"
-            :class="{ active: viewMode === 'list' }"
-            @click="viewMode = 'list'"
-          >
-            <template #icon>
-              <UnorderedListOutlined />
-            </template>
-          </a-button>
-          <a-button
-            type="text"
-            size="small"
-            :class="{ active: viewMode === 'grid' }"
-            @click="viewMode = 'grid'"
-          >
-            <template #icon>
-              <AppstoreOutlined />
-            </template>
-          </a-button>
-        </div>
-      </div>
-
-      <!-- Document Table -->
+      <!-- Table -->
       <div class="table-container">
-        <a-table :columns="columns" :data-source="documents" :pagination="false" :show-header="true" />
+        <a-table
+          :columns="columns"
+          :data-source="documents"
+          :loading="loading"
+          :pagination="{
+            current,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: t => `共 ${t} 个文件`
+          }"
+          @change="handlePageChange"
+          :row-key="record => record.id"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'fileName'">
+              <div class="doc-title-cell" @click="openFile(record)">
+                <TableOutlined />
+                <span class="file-link">{{ record.fileName }}</span>
+              </div>
+            </template>
+            <template v-else-if="column.key === 'owner'">
+              <div class="owner-cell">
+                <a-avatar
+                  v-if="ownerMap.get(record.ownerId)?.avatar"
+                  :src="ownerMap.get(record.ownerId)?.avatar"
+                  :size="24"
+                />
+                <a-avatar v-else :size="24">
+                  <template #icon><UserOutlined /></template>
+                </a-avatar>
+                <span class="owner-name">{{
+                  ownerMap.get(record.ownerId)?.nickName || record.ownerId
+                }}</span>
+              </div>
+            </template>
+            <template v-else-if="column.key === 'createdAt'">
+              <span :title="formatFullTime(record.createdAt)">{{
+                formatTime(record.createdAt)
+              }}</span>
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <a-dropdown trigger="click" placement="bottomRight">
+                <MoreOutlined class="more-icon" @click.prevent />
+                <template #overlay>
+                  <a-menu>
+                    <a-menu-item @click="handleDownload(record)">
+                      <DownloadOutlined />
+                      下载
+                    </a-menu-item>
+                    <a-menu-item @click="handleRename(record)">
+                      <EditOutlined />
+                      重命名
+                    </a-menu-item>
+                    <a-menu-divider />
+                    <a-menu-item @click="handleDelete(record)" class="delete-menu-item">
+                      <DeleteOutlined />
+                      删除
+                    </a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
+            </template>
+          </template>
+        </a-table>
       </div>
     </main>
+
+    <!-- 新建文件弹窗 -->
+    <a-modal
+      v-model:open="showCreateModal"
+      title="新建空白表格"
+      @ok="handleCreate"
+      @cancel="createFileName = ''"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="文件名">
+          <a-input v-model:value="createFileName" placeholder="请输入文件名" allow-clear />
+        </a-form-item>
+        <a-form-item label="文件类型">
+          <a-radio-group v-model:value="createFileType">
+            <a-radio-button value="xlsx">XLSX</a-radio-button>
+            <a-radio-button value="xls">XLS</a-radio-button>
+            <a-radio-button value="csv">CSV</a-radio-button>
+          </a-radio-group>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 上传文件弹窗 -->
+    <a-modal
+      v-model:open="showUploadModal"
+      title="上传文件"
+      @ok="handleUpload"
+      @cancel="uploadFile = null"
+      :confirm-loading="uploadLoading"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="选择文件">
+          <input type="file" accept=".xlsx,.xls,.csv" @change="handleFileSelect" />
+          <div v-if="uploadFile" class="file-info">已选择: {{ uploadFile.name }}</div>
+        </a-form-item>
+        <a-alert
+          message="支持格式"
+          description="仅支持 .xlsx、.xls、.csv 格式的文件"
+          type="info"
+          show-icon
+        />
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -234,7 +487,6 @@ const selectedDoc = ref<number | null>(null)
   color: #000;
 }
 
-/* 覆盖 Ant Design 按钮圆角 */
 .home-page :deep(.ant-btn) {
   border-radius: 6px;
 }
@@ -253,10 +505,6 @@ const selectedDoc = ref<number | null>(null)
 
 .home-page :deep(.ant-radio-button-wrapper:last-child) {
   border-radius: 0 6px 6px 0;
-}
-
-.home-page :deep(.ant-radio-button-wrapper:not(:first-child):not(:last-child)) {
-  border-radius: 0;
 }
 
 /* Sidebar */
@@ -319,33 +567,6 @@ const selectedDoc = ref<number | null>(null)
   letter-spacing: 0.5px;
 }
 
-.nav-doc-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  color: #333;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.nav-doc-item:hover {
-  background: rgba(0, 0, 0, 0.04);
-}
-
-.nav-doc-item.selected {
-  background: rgba(0, 0, 0, 0.06);
-}
-
-.nav-doc-item .doc-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
 /* Main Content */
 .main-content {
   flex: 1;
@@ -361,7 +582,6 @@ const selectedDoc = ref<number | null>(null)
   justify-content: space-between;
   padding: 12px 24px;
   border-bottom: 1px solid #e5e5e5;
-  height: 52px;
 }
 
 .header-left {
@@ -371,143 +591,8 @@ const selectedDoc = ref<number | null>(null)
 
 .header-actions {
   display: flex;
-  gap: 4px;
-}
-
-.btn-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: transparent;
-  color: #666;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.15s ease;
-}
-
-.btn-icon:hover {
-  background: #f5f5f5;
-  color: #000;
-}
-
-.header-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: #000;
-}
-
-/* Action Bar */
-.action-bar {
-  padding: 20px 24px 16px;
-}
-
-.action-buttons {
-  display: flex;
   gap: 12px;
   align-items: center;
-}
-
-.btn-primary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: #000;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-primary:hover {
-  background: #222;
-}
-
-.btn-secondary {
-  padding: 8px 16px;
-  background: transparent;
-  color: #000;
-  border: 1px solid #e5e5e5;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-secondary:hover {
-  border-color: #000;
-  background: #f5f5f5;
-}
-
-/* Filter Bar */
-.filter-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px 16px;
-}
-
-.filter-tabs {
-  display: flex;
-  gap: 4px;
-}
-
-.filter-tab {
-  padding: 6px 12px;
-  background: transparent;
-  color: #666;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.filter-tab:hover {
-  background: #f5f5f5;
-  color: #000;
-}
-
-.filter-tab.active {
-  background: #f5f5f5;
-  color: #000;
-  font-weight: 500;
-}
-
-.filter-tab.add-filter {
-  color: #999;
-}
-
-.filter-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.btn-icon-small {
-  padding: 6px 10px;
-  background: transparent;
-  color: #666;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-icon-small:hover {
-  background: #f5f5f5;
-  color: #000;
-}
-
-.btn-icon-small.active {
-  background: #f5f5f5;
-  color: #000;
 }
 
 /* Table */
@@ -517,90 +602,60 @@ const selectedDoc = ref<number | null>(null)
   padding: 0 24px 24px;
 }
 
-.doc-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.doc-table thead {
-  position: sticky;
-  top: 0;
-  background: #fff;
-}
-
-.doc-table th {
-  text-align: left;
-  padding: 12px 16px;
-  font-weight: 500;
-  color: #666;
-  font-size: 12px;
-  border-bottom: 1px solid #e5e5e5;
-  white-space: nowrap;
-}
-
-.doc-row {
-  border-bottom: 1px solid #f0f0f0;
-  transition: all 0.15s ease;
-}
-
-.doc-row:hover {
-  background: #fafafa;
-}
-
-.doc-table td {
-  padding: 12px 16px;
-  color: #333;
-}
-
 .doc-title-cell {
   display: flex;
   align-items: center;
   gap: 8px;
   font-weight: 500;
-}
-
-.btn-more {
-  padding: 4px 8px;
-  background: transparent;
-  color: #666;
-  border: none;
-  border-radius: 4px;
   cursor: pointer;
-  font-size: 16px;
-  transition: all 0.15s ease;
 }
 
-.btn-more:hover {
-  background: #f5f5f5;
+.file-link {
   color: #000;
+  text-decoration: none;
 }
 
-/* Responsive */
-@media (max-width: 1024px) {
-  .sidebar {
-    width: 220px;
-  }
-
-  .filter-bar {
-    flex-direction: column;
-    gap: 12px;
-    align-items: flex-start;
-  }
-
-  .filter-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
+.file-link:hover {
+  color: #1890ff;
 }
 
-@media (max-width: 768px) {
-  .sidebar {
-    display: none;
-  }
+.more-icon {
+  font-size: 18px;
+  cursor: pointer;
+  color: #666;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
 
-  .action-buttons {
-    flex-wrap: wrap;
-  }
+.more-icon:hover {
+  color: #1890ff;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.delete-menu-item {
+  color: #ff4d4f;
+}
+
+.delete-menu-item:hover {
+  color: #ff4d4f;
+  background: #fff1f0;
+}
+
+.owner-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.owner-name {
+  font-size: 13px;
+  color: #333;
+}
+
+.file-info {
+  margin-top: 8px;
+  color: #52c41a;
+  font-size: 12px;
 }
 </style>
