@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@ant-design/icons-vue": "^7.0.1",
+    "@univerjs/icons": "^1.1.1",
     "@univerjs/preset-sheets-core": "^0.16.1",
     "@univerjs/presets": "^0.16.1",
     "@vueuse/core": "^14.2.1",

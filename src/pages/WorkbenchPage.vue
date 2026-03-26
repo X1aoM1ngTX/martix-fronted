@@ -15,7 +15,6 @@ import {
   SearchOutlined,
   PlusOutlined,
   UploadOutlined,
-  TableOutlined,
   MoreOutlined,
   DownloadOutlined,
   EditOutlined,
@@ -23,6 +22,7 @@ import {
   ReloadOutlined,
   UserOutlined
 } from '@ant-design/icons-vue'
+import XlsxIcon from '@/components/XlsxIcon.vue'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
@@ -236,6 +236,12 @@ const columns = [
     dataIndex: 'createdAt'
   },
   {
+    title: '更新时间',
+    key: 'updatedAt',
+    width: 180,
+    dataIndex: 'updatedAt'
+  },
+  {
     title: '操作',
     key: 'action',
     width: 80,
@@ -383,7 +389,7 @@ onMounted(() => {
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'fileName'">
               <div class="doc-title-cell" @click="openFile(record)">
-                <TableOutlined />
+                <XlsxIcon />
                 <span class="file-link">{{ record.fileName }}</span>
               </div>
             </template>
@@ -405,6 +411,11 @@ onMounted(() => {
             <template v-else-if="column.key === 'createdAt'">
               <span :title="formatFullTime(record.createdAt)">{{
                 formatTime(record.createdAt)
+              }}</span>
+            </template>
+            <template v-else-if="column.key === 'updatedAt'">
+              <span :title="formatFullTime(record.updatedAt)">{{
+                formatTime(record.updatedAt)
               }}</span>
             </template>
             <template v-else-if="column.key === 'action'">

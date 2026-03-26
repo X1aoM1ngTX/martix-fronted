@@ -1,19 +1,5 @@
 <template>
   <div class="spreadsheet-page">
-    <div class="toolbar">
-      <a-button type="primary" :loading="saving" @click="handleManualSave">
-        保存
-      </a-button>
-      <span class="save-status">
-        <span v-if="autoSaveCount > 0" class="auto-save-count">
-          自动保存 {{ autoSaveCount }}/10
-        </span>
-        <span v-if="lastSaveTime" class="last-save-time">
-          {{ lastSaveTime }}
-        </span>
-      </span>
-      <a-button @click="handleBack">返回工作台</a-button>
-    </div>
     <div v-show="loading" class="loading-container">
       <a-spin size="large" tip="加载中..." />
     </div>
@@ -29,13 +15,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, toRaw, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, toRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { UniverSheetsCorePreset } from '@univerjs/preset-sheets-core'
 import sheetsCoreZhCN from '@univerjs/preset-sheets-core/locales/zh-CN'
 import { createUniver, LocaleType, mergeLocales, type Univer } from '@univerjs/presets'
 import { getSheetData, saveSheetData } from '@/api/sheetController'
+import { UniverSaveButtonPlugin } from '@/univer-plugins/save-button'
 
 import '@univerjs/preset-sheets-core/lib/index.css'
 
@@ -63,6 +50,14 @@ const saving = ref(false)
 const fileId = ref<string>('')
 const autoSaveCount = ref(0)
 const lastSaveTime = ref('')
+const fileName = ref<string>('')
+const originalTitle = ref('')
+
+// 更新页面标题
+const updatePageTitle = (name: string) => {
+  document.title = `${name} - Martix 矩阵`
+  fileName.value = name
+}
 
 const createEmptyWorkbookData = () => ({
   id: 'workbook-1',
@@ -125,6 +120,9 @@ const createEmptyWorkbookData = () => ({
 })
 
 onMounted(() => {
+  // 保存原始标题
+  originalTitle.value = document.title
+
   const id = route.params.fileId as string
   if (!id) {
     error.value = '文件ID不存在'
@@ -133,9 +131,18 @@ onMounted(() => {
   }
   fileId.value = id
   initUniver()
+
+  // 监听来自 Univer 插件的保存事件
+  window.addEventListener('univer-save', handleUniverSave)
 })
 
 onBeforeUnmount(() => {
+  // 移除事件监听
+  window.removeEventListener('univer-save', handleUniverSave)
+  // 恢复原始标题
+  if (originalTitle.value) {
+    document.title = originalTitle.value
+  }
   // 页面卸载前强制保存到 COS
   if (univerAPI && fileId.value) {
     const activeWorkbook = univerAPI.getActiveWorkbook()
@@ -178,13 +185,16 @@ const initUniver = async () => {
           container: univerContainer.value,
           header: true,
           toolbar: true,
-          ribbonType: 'default',
+          ribbonType: 'classic',
           footer: false,
           contextMenu: true,
           formulaBar: true
         })
       ]
     })
+
+    // 注册自定义保存按钮插件
+    univer.registerPlugin(UniverSaveButtonPlugin)
 
     console.log('Univer instance created successfully')
     univerAPI = univerApiInstance
@@ -196,6 +206,10 @@ const initUniver = async () => {
     let workbookData
     if (res.code === 0 && res.data) {
       workbookData = JSON.parse(JSON.stringify(toRaw(res.data)))
+      // 更新页面标题
+      if (workbookData.name) {
+        updatePageTitle(workbookData.name as string)
+      }
     } else {
       error.value = res.message || '加载文件失败'
       loading.value = false
@@ -335,20 +349,29 @@ const handleAutoSave = debounce(async (workbookData: Record<string, unknown>) =>
     await saveSheetData(fileId.value, cleanData, false)
     autoSaveCount.value = (autoSaveCount.value + 1) % 10
     lastSaveTime.value = new Date().toLocaleTimeString()
+    // 通知 Univer 按钮更新最后保存时间
+    window.dispatchEvent(new CustomEvent('univer-last-save-time', { detail: lastSaveTime.value }))
     console.log('自动保存成功', autoSaveCount.value)
   } catch (e) {
     console.error('自动保存失败:', e)
   }
 }, 2000)
 
-// 手动保存（强制同步到 COS）
-const handleManualSave = async () => {
+/**
+ * 处理来自 Univer 插件的保存事件
+ */
+const handleUniverSave = async (event: Event) => {
+  const customEvent = event as CustomEvent<{ syncToCos: boolean }>
+  const { syncToCos } = customEvent.detail
+
   if (!univerAPI || !fileId.value) {
     message.error('保存失败：编辑器未初始化')
     return
   }
 
   saving.value = true
+  // 通知 Univer 按钮开始保存
+  window.dispatchEvent(new CustomEvent('univer-saving-state', { detail: true }))
   try {
     const activeWorkbook = univerAPI.getActiveWorkbook()
     if (!activeWorkbook) {
@@ -358,15 +381,18 @@ const handleManualSave = async () => {
 
     const workbookData = activeWorkbook.save()
     const cleanData = JSON.parse(JSON.stringify(toRaw(workbookData)))
-    // 确保保存前样式数据结构正确
     ensureStylesStructure(cleanData)
 
-    const res = await saveSheetData(fileId.value, cleanData, true)
+    const res = await saveSheetData(fileId.value, cleanData, syncToCos)
 
     if (res.code === 0) {
-      message.success('保存成功')
-      autoSaveCount.value = 0
+      if (syncToCos) {
+        message.success('保存成功')
+        autoSaveCount.value = 0
+      }
       lastSaveTime.value = new Date().toLocaleTimeString()
+      // 通知 Univer 按钮更新最后保存时间
+      window.dispatchEvent(new CustomEvent('univer-last-save-time', { detail: lastSaveTime.value }))
     } else {
       message.error(res.message || '保存失败')
     }
@@ -375,6 +401,8 @@ const handleManualSave = async () => {
     message.error('保存失败')
   } finally {
     saving.value = false
+    // 通知 Univer 按钮保存结束
+    window.dispatchEvent(new CustomEvent('univer-saving-state', { detail: false }))
   }
 }
 
@@ -432,14 +460,7 @@ const handleBack = () => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-}
-
-.toolbar {
-  padding: 8px 16px;
-  background: #f5f5f5;
-  border-bottom: 1px solid #e0e0e0;
-  display: flex;
-  gap: 8px;
+  position: relative;
 }
 
 .loading-container,
@@ -448,6 +469,10 @@ const handleBack = () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  z-index: 100;
 }
 
 .univer-container {
@@ -456,4 +481,39 @@ const handleBack = () => {
   height: 100%;
   overflow: hidden;
 }
+
+/* 保存状态指示器 - 定位到工具栏右侧 */
+.save-indicator {
+  position: absolute;
+  top: 12px;
+  right: 60px;
+  z-index: 10;
+  font-size: 12px;
+  color: #666;
+  background: #f5f5f5;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+}
+
+.saving-text {
+  color: #1890ff;
+}
+
+.auto-save-count {
+  color: #faad14;
+}
+
+.last-save-time {
+  color: #52c41a;
+}
+
+/* 返回按钮 - 左上角 */
+.back-btn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
+}
+
 </style>

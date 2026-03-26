@@ -1,7 +1,7 @@
 <template>
   <div class="global-header">
     <div class="header-left">
-      <img class="logo" src="@/assets/MATRIX-ALPHA.png" alt="MATRIX" style="height: 200px;"/>
+      <img class="logo" src="@/assets/MATRIX.svg" alt="MATRIX" @click="router.push('/')"/>
     </div>
     <Menu
       v-model:selectedKeys="selectedKeys"
@@ -175,6 +175,7 @@ const handleLogout = async () => {
   height: 40px;
   width: auto;
   object-fit: contain;
+  cursor: pointer;
 }
 
 .site-title {
