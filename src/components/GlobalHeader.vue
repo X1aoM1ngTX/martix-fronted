@@ -134,9 +134,8 @@ const handleRegister = () => {
 
 const handleLogout = async () => {
   try {
-    const response = await userLogout()
-    const data = response.data
-    if (data.code === 0) {
+    const response = await userLogout() as API.BaseResponseBoolean
+    if (response.code === 0) {
       message.success('退出登录成功')
       // 清空用户信息
       loginUserStore.loginUser = {} as API.LoginUserVO

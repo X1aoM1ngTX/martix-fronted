@@ -44,6 +44,7 @@ const { Header, Content, Footer } = Layout
   flex: 1;
   background: #f0f2f5;
   min-height: calc(100vh - 64px - 70px);
+  overflow: hidden;
 }
 
 .layout-footer {

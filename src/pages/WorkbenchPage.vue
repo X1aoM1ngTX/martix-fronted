@@ -496,6 +496,7 @@ onMounted(() => {
   min-height: 100vh;
   background: #fff;
   color: #000;
+  overflow: hidden;
 }
 
 .home-page :deep(.ant-btn) {
@@ -609,8 +610,26 @@ onMounted(() => {
 /* Table */
 .table-container {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
   padding: 0 24px 24px;
+}
+
+/* 隐藏滚动条但保持滚动功能 */
+.table-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.table-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .doc-title-cell {

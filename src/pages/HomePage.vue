@@ -181,6 +181,17 @@ const goToAbout = () => {
 .home-page {
   min-height: 100vh;
   overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* 隐藏滚动条但保持滚动功能 */
+.home-page::-webkit-scrollbar {
+  display: none;
+}
+
+.home-page {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* Hero Section */

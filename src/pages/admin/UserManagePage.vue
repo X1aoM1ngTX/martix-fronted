@@ -411,7 +411,10 @@ onMounted(() => {
 .user-manage-page {
   padding: 24px;
   background: #fff;
-  min-height: calc(100vh - 64px - 70px);
+  height: calc(100vh - 64px - 70px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .page-header {
@@ -419,6 +422,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
+  flex-shrink: 0;
 }
 
 .page-header h2 {
@@ -433,9 +437,29 @@ onMounted(() => {
   padding: 16px;
   border-radius: 4px;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .table-area {
-  background: #fff;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* 隐藏滚动条但保持滚动功能 */
+.table-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.table-area::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.table-area::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.table-area::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 </style>

@@ -285,7 +285,7 @@ const stats = ref([
           欢迎贡献代码、提出建议或报告问题
         </p>
         <div class="opensource-links">
-          <a href="https://github.com" target="_blank" rel="noopener" class="opensource-link">
+          <a href="https://github.com/X1aoM1ngTX/matrix-backend" target="_blank" rel="noopener" class="opensource-link">
             <GithubOutlined />
             <span>GitHub 仓库</span>
             <ArrowRightOutlined />
