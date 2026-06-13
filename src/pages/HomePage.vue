@@ -66,7 +66,7 @@ const goToAbout = () => {
           <span>AI 原生表格系统</span>
         </div>
         <h1 class="hero-title">
-          <img class="title-logo" src="@/assets/MATRIX.svg" alt="MATRIX" />
+          <img class="title-logo" src="@/assets/MATRIX-4.png" alt="MATRIX" />
           <span class="title-sub">云端协作表格系统</span>
         </h1>
         <p class="hero-description">
@@ -298,7 +298,7 @@ const goToAbout = () => {
 }
 
 .title-logo {
-  max-width: 500px;
+  max-width: 100px;
   object-fit: contain;
   animation: fadeInUp 0.6s ease-out 0.1s backwards;
 }

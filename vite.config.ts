@@ -8,12 +8,14 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 export default defineConfig({
   plugins: [
     vue(),
-    vueDevTools(),
+    vueDevTools({
+      launchEditor: 'E:/Microsoft VS Code/bin/code',
+    })
   ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
-    },
+    }
   },
   optimizeDeps: {
     include: [
@@ -24,7 +26,7 @@ export default defineConfig({
       '@univerjs/design',
       'react',
       'react-dom',
-      'rxjs',
-    ],
-  },
+      'rxjs'
+    ]
+  }
 })

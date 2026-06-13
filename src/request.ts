@@ -5,7 +5,7 @@ import { message } from 'ant-design-vue'
 // 创建内部 Axios 实例
 const internalAxios = axios.create({
   baseURL: 'http://localhost:8123/api',
-  timeout: 60000,
+  timeout: 120000,
   withCredentials: true,
 })
 

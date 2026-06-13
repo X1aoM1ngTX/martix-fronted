@@ -1,7 +1,7 @@
 <template>
   <div class="global-header">
     <div class="header-left">
-      <img class="logo" src="@/assets/MATRIX.svg" alt="MATRIX" @click="router.push('/')"/>
+      <img class="logo" src="@/assets/MATRIX-1.png" alt="MATRIX" @click="router.push('/')"/>
     </div>
     <Menu
       v-model:selectedKeys="selectedKeys"

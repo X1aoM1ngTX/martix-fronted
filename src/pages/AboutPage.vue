@@ -121,7 +121,7 @@ const stats = ref([
           <span>关于项目</span>
         </div>
         <h1 class="hero-title">
-          <img class="title-logo" src="@/assets/MATRIX.svg" alt="MATRIX" />
+          <img class="title-logo" src="@/assets/MATRIX-1.png" alt="MATRIX" />
           <span class="title-sub">云端协作表格系统</span>
         </h1>
         <p class="hero-description">
